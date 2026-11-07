@@ -1,1 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLM Hallucination Detector</title>
+<style>
+  body { font-family: system-ui, Arial, sans-serif; max-width: 860px; margin: 24px auto; padding: 0 16px; color: #1f2937; }
+  h1 { margin-bottom: 4px; }
+  .sub { color: #6b7280; margin-top: 0; }
+  .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin: 16px 0; }
+  textarea { width: 100%; box-sizing: border-box; padding: 10px; font-size: 15px; border: 1px solid #d1d5db; border-radius: 8px; margin: 10px 0; }
+  button { background: #2563eb; color: white; border: 0; padding: 10px 20px; border-radius: 8px; font-size: 15px; cursor: pointer; }
+  button:disabled { background: #93c5fd; cursor: wait; }
+  .counts { display: flex; gap: 12px; flex-wrap: wrap; }
+  .count { flex: 1; min-width: 150px; padding: 12px; border-radius: 8px; text-align: center; }
+  .count b { display: block; font-size: 26px; }
+  .Supported { background: #dcfce7; border-left: 5px solid #16a34a; }
+  .Contradicted { background: #fee2e2; border-left: 5px solid #dc2626; }
+  .Unverified { background: #f3f4f6; border-left: 5px solid #9ca3af; }
+  .claim { padding: 10px 12px; border-radius: 8px; margin: 8px 0; }
+  .tag { font-weight: 600; font-size: 13px; }
+  .evidence { font-size: 13px; color: #4b5563; margin-top: 6px; }
+  #error { color: #b91c1c; margin-top: 8px; }
+  .note { font-size: 13px; color: #6b7280; }
+  #answerBox { white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>LLM Hallucination Detector</h1>
+<p class="sub">Breaks an answer into claims and checks each one against Wikipedia.</p>
+
+<div class="card">
+  <label><input type="radio" name="mode" value="question" checked> Ask a question</label>
+  &nbsp;&nbsp;
+  <label><input type="radio" name="mode" value="answer"> Paste an answer to check</label>
+  <textarea id="text" rows="4" placeholder="e.g. Tell me about Alan Turing."></textarea>
+  <button id="go">Check</button>
+  <span id="status" class="note"></span>
+  <div id="error"></div>
+</div>
+
+<div id="result" hidden>
+  <div class="card">
+    <h3 id="pageTitle"></h3>
+    <div class="counts">
+      <div class="count Supported"><b id="nSup">0</b>Supported</div>
+      <div class="count Contradicted"><b id="nCon">0</b>Contradicted</div>
+      <div class="count Unverified"><b id="nUnv">0</b>Could not verify</div>
+    </div>
+    <p class="note">"Could not verify" means Wikipedia did not confirm the claim. It does not mean the claim is false.</p>
+  </div>
+  <div class="card"><h3>Answer checked</h3><div id="answerBox"></div></div>
+  <h3>Claims</h3>
+  <div id="claims"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+$("go").addEventListener("click", async () => {
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+  const text = $("text").value.trim();
+  $("error").textContent = "";
+  if (!text) { $("error").textContent = "Please enter some text."; return; }
+
+  $("go").disabled = true;
+  $("status").textContent = " Checking claims...";
+  try {
+    const res = await fetch("/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode, text })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Request failed");
+    render(data);
+  } catch (e) {
+    $("error").textContent = e.message;
+  } finally {
+    $("go").disabled = false;
+    $("status").textContent = "";
+  }
+});
+
+function render(d) {
+  $("result").hidden = false;
+  $("pageTitle").textContent = "Wikipedia page used: " + d.page;
+  $("nSup").textContent = d.summary.supported;
+  $("nCon").textContent = d.summary.contradicted;
+  $("nUnv").textContent = d.summary.unverifiable;
+  $("answerBox").textContent = d.answer;
+
+  const box = $("claims");
+  box.innerHTML = "";
+  d.claims.forEach(c => {
+    const cls = c.verdict === "Supported" ? "Supported"
+              : c.verdict === "Contradicted" ? "Contradicted" : "Unverified";
+    const label = c.verdict === "Not enough info" ? "Could not verify" : c.verdict;
+    const div = document.createElement("div");
+    div.className = "claim " + cls;
+
+    const tag = document.createElement("div");
+    tag.className = "tag";
+    tag.textContent = label + " (confidence " + c.confidence.toFixed(2) + ")";
+    const claim = document.createElement("div");
+    claim.textContent = c.claim;
+    const ev = document.createElement("div");
+    ev.className = "evidence";
+    ev.textContent = c.evidence ? "Evidence: " + c.evidence : "No evidence sentence found.";
+
+    div.append(tag, claim, ev);
+    box.appendChild(div);
+  });
+}
+</script>
+</body>
+</html>
 
