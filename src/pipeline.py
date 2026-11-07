@@ -10,7 +10,7 @@ from transformers import pipeline as hf_pipeline
 load_dotenv(find_dotenv())
 
 MODEL = "openai/gpt-oss-120b"
-CON_TOP = 3  # placeholder: top-1 vs top-3 gets decided on the WikiBio tuning split in Week 3
+CON_TOP = 1  # placeholder: top-1 vs top-3 gets decided on the WikiBio tuning split in Week 3
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 wiki = wikipediaapi.Wikipedia(user_agent="hallucination-detector/1.0 (student project)", language="en")
@@ -68,8 +68,6 @@ def find_wiki_page(name):
 def resolve_subject(sent, title):
     last = title.split()[-1]
     s = re.sub(rf"^The {last}\b", f"The {title}", sent, flags=re.I)
-    s = re.sub(r"^(He|She|It|They)\b", title, s)
-    s = re.sub(r"^(His|Her|Its|Their)\b", f"{title}'s", s)
     return s
 
 def build_evidence(title):
